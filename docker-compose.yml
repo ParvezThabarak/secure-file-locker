@@ -1,0 +1,118 @@
+# ============================================================
+# Secure File Locker — Complete Docker Setup
+# 21IPE315P — Cloud Product and Platform Engineering
+#
+# Includes:
+#   - Flask backend
+#   - React frontend
+#   - MySQL database (no RDS needed!)
+#   - Grafana dashboard (monitoring)
+#
+# Run with: docker-compose up --build -d
+# ============================================================
+
+version: '3.8'
+
+services:
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: sfl-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-sflroot123}
+      MYSQL_DATABASE: ${MYSQL_DB:-secure_file_storage}
+      MYSQL_USER: ${MYSQL_USER:-sfluser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sflpass123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - sfl-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Flask Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sfl-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - MYSQL_HOST=mysql
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - sfl-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sfl-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - sfl-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: sfl-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - sfl-network
+
+volumes:
+  mysql_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  sfl-network:
+    name: sfl-network
