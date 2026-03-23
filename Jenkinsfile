@@ -7,10 +7,11 @@ pipeline {
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
+                git branch: 'main',
                 git credentialsId: 'github-jenkins',
-                    url: 'https://github.com/ParvezThabarak/secure-file-locker'
+                    url: 'https://github.com/ParvezThabarak/secure-file-locker.git'
             }
         }
 
