@@ -1,35 +1,27 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
-    }
-
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main',
-                git credentialsId: 'github-jenkins',
+                git(
+                    branch: 'main',
+                    credentialsId: 'github-jenkins',
                     url: 'https://github.com/ParvezThabarak/secure-file-locker.git'
+                )
             }
         }
 
-        stage('Build') {
+        stage('Install Dependencies') {
             steps {
-                sh 'mvn clean package'
+                bat 'pip install -r requirements.txt'
             }
         }
 
-        stage('Test') {
+        stage('Run Application') {
             steps {
-                sh 'mvn test'
-            }
-        }
-
-        stage('Archive Artifact') {
-            steps {
-                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                bat 'python app.py'
             }
         }
     }
