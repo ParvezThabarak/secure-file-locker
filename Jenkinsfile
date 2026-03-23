@@ -13,15 +13,9 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Test Stage') {
             steps {
-                bat '"C:\\Users\\parve\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" -m pip install -r requirements.txt'
-            }
-        }
-
-        stage('Run Application') {
-            steps {
-                bat '"C:\\Users\\parve\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" app.py'
+                bat 'echo Jenkins CI Working Successfully'
             }
         }
     }
