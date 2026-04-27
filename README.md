@@ -1,292 +1,189 @@
-# S3 File Manager - CPPE Project review 2 jenkin
+# VaultOS — Secure File Locker v3
 
-A secure file management application that allows users to upload, organize, and share files stored in AWS S3 buckets. This application is designed for local deployment on a user's computer.
+Enterprise-grade encrypted file storage with ML threat intelligence, two-factor authentication, REST API, real-time notifications, and cloud integration.
 
-## 🏗️ Architecture
+## ✨ Features
 
-This application uses a **separate containers architecture** for better maintainability and scalability:
+### Core Security
+- **AES-256-CBC encryption** with PBKDF2-HMAC-SHA256 key derivation (100K iterations)
+- **Two-Factor Authentication (2FA)** — Google Authenticator TOTP integration
+- **Brute-force protection** — account lock after 5 failed login attempts
+- **File sharing** with expiry links, max-download limits, and revocation
 
-- **Backend Container**: Flask API server running on port 5000
-- **Frontend Container**: React app served by Nginx on port 3000
-- **Communication**: Frontend nginx proxies `/api/*` requests to backend
-- **Database**: External MySQL database (user-provided)
-- **Storage**: Local volumes for logs, uploads, and static files
+### ML Intelligence Layer
+- **Random Forest Classifier** — 150-tree model trained on 900+ samples, predicts file category
+- **Isolation Forest** — anomaly detection for suspicious upload patterns
+- **Composite Threat Scorer** — combines ML signals + heuristics into 0–1 risk score
+- **Real-time ML pre-scan** — threat analysis before you even submit the upload
 
-## 🏗️ Project Structure
+### REST API + JWT
+- Full programmatic API at `/api/v1/` with JWT Bearer token authentication
+- Endpoints: login, list/upload/download/delete files, ML scan, admin stats
+- Enables integration with external applications and automation
 
-```
-secure_file_storage/
-├── backend/                 # Flask API backend
-│   ├── app/                # Application package
-│   ├── models/             # Database models
-│   ├── routes/             # API routes
-│   ├── services/           # Business logic services
-│   ├── requirements.txt    # Python dependencies
-│   ├── run.py             # Application entry point
-│   ├── Dockerfile         # Backend container configuration
-│   └── .env               # Backend environment variables
-├── frontend/               # React frontend
-│   ├── src/               # React source code
-│   ├── public/            # Static assets
-│   ├── package.json       # Node.js dependencies
-│   ├── Dockerfile         # Frontend container configuration
-│   ├── nginx.conf         # Nginx configuration for serving frontend
-│   └── .env              # Frontend environment variables
-├── docker-compose.yml     # Multi-service configuration
-├── logs/                  # Application logs (created automatically)
-├── uploads/               # File uploads (created automatically)
-├── static/                # Static files (created automatically)
-└── README.md             # This file
-```
+### Real-Time Notifications (WebSocket)
+- **Flask-SocketIO** powered live toast notifications
+- Instant alerts when someone shares a file with you
+- Admin alerts on HIGH/CRITICAL threat uploads
+
+### Cloud Integration (AWS — Optional)
+- **S3** — encrypted file backup storage
+- **SNS** — email alerts for high-threat uploads
+- **CloudWatch** — cloud audit logs with 90-day retention
+- **Terraform IaC** — one-click AWS infrastructure provisioning
+
+### DevOps Pipeline
+- **11-stage Jenkinsfile** — checkout, setup, lint, ML train, unit tests, integration tests, coverage, SonarQube, Docker, deploy
+- **SonarQube** quality gate for code analysis and security scanning
+- **Dockerfile** with Gunicorn for production deployment
+
+### UI/UX
+- **Dark/Light theme** toggle with localStorage persistence
+- **File preview** — decrypt and view images, PDFs, text files in the browser
+- **Glassmorphism design** with Inter + JetBrains Mono fonts
+- **Admin dashboard** with threat analytics, ML model status, AWS status, audit logs
+
+---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Docker and Docker Compose
-- MySQL 8.0+ server (you must provide your own MySQL database)
-- AWS Account (for S3 integration)
-
-### 1. Clone and Setup
-
 ```bash
-git clone <repository-url>
-cd secure_file_storage
+# Clone and setup
+git clone <your-repo-url>
+cd secure-locker-v2
+python -m venv venv
+.\venv\Scripts\Activate   # Windows
+pip install -r requirements.txt
+python run.py
+# → http://localhost:5000
+
+# Default admin: admin / Admin@1234
 ```
 
-### 2. Configure Backend
+---
+
+## 🧪 Run Tests
 
 ```bash
-# Copy backend environment template
-cp backend/env_example.txt backend/.env
-
-# Edit backend/.env with your MySQL database configuration:
-# MYSQL_HOST=your-mysql-host
-# MYSQL_USER=your-mysql-username  
-# MYSQL_PASSWORD=your-mysql-password
-# MYSQL_DB=secure_file_storage
-# SECRET_KEY=your-secret-key-here
-# AWS_CREDENTIALS_ENCRYPTION_KEY=your-encryption-key-here
+pytest tests/ -v
+pytest tests/ --cov=app --cov=ml_engine --cov-report=term-missing
 ```
 
-**Important**: Generate proper encryption keys:
-```bash
-# Generate Flask secret key
-python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
+**65 tests** covering crypto, ML engine, auth, locker, admin, 2FA, preview, REST API, and AWS integration.
 
-# Generate AWS credentials encryption key
-python3 -c "from cryptography.fernet import Fernet; print('AWS_CREDENTIALS_ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
-```
+---
 
-### 3. Configure Frontend
+## 🔌 REST API Usage
 
 ```bash
-# Copy frontend environment template
-cp frontend/env.example frontend/.env
+# 1. Get JWT token
+TOKEN=$(curl -s -X POST http://localhost:5000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin@1234"}' | jq -r '.token')
 
-# The frontend .env is already configured for local deployment
-# No changes needed unless you want to customize app settings
+# 2. List files
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5000/api/v1/files
+
+# 3. Upload a file
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -F "file=@document.pdf" -F "password=mypass123" \
+  http://localhost:5000/api/v1/files/upload
+
+# 4. ML threat scan
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"suspicious.exe","size":500000}' \
+  http://localhost:5000/api/v1/ml/scan
 ```
 
-### 4. Deploy the Application
+---
+
+## 🛡️ Two-Factor Authentication
+
+1. Log in → Click **"Enable 2FA"** on the dashboard
+2. Scan the QR code with Google Authenticator
+3. Enter the 6-digit code to verify
+4. On future logins, you'll be prompted for your TOTP code after password
+
+---
+
+## ☁️ AWS Integration (Optional)
+
+Set these environment variables to activate cloud features:
 
 ```bash
-# Create necessary directories
-mkdir -p logs uploads static
-
-# Start both backend and frontend services
-docker-compose up --build
-
-# Or run in detached mode
-docker-compose up --build -d
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_REGION=ap-south-1
+AWS_S3_BUCKET=your-bucket-name
+AWS_SNS_TOPIC_ARN=arn:aws:sns:...
+AWS_CLOUDWATCH_GROUP=VaultOS
 ```
 
-### 5. Access the Application
-
-- **Application**: http://localhost:3000 (Frontend served by Nginx)
-- **Backend API**: http://localhost:5000 (Direct backend access)
-- **API Endpoints**: http://localhost:3000/api/* (Proxied through frontend)
-- **Health Check**: http://localhost:3000/health
-
-## 🔧 Configuration
-
-### Backend Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `MYSQL_HOST` | MySQL server hostname | `localhost` or `your-db-host.com` |
-| `MYSQL_USER` | MySQL username | `your_username` |
-| `MYSQL_PASSWORD` | MySQL password | `your_password` |
-| `MYSQL_DB` | Database name | `secure_file_storage` |
-| `SECRET_KEY` | Flask secret key | Generate with: `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `AWS_CREDENTIALS_ENCRYPTION_KEY` | Encryption key for AWS credentials | Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-
-### Frontend Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VITE_API_URL` | Backend API URL | `/api` (proxied through nginx) |
-| `VITE_APP_NAME` | Application name | `S3 File Manager` |
-| `VITE_APP_VERSION` | Application version | `1.0.0` |
-
-## 🗄️ Database Setup
-
-The application automatically:
-1. Connects to your MySQL server
-2. Creates the database if it doesn't exist
-3. Creates all required tables
-4. Verifies the setup
-
-No manual database setup is required!
-
-## 🔐 Security Features
-
-- **User Authentication**: Secure login with password hashing
-- **2FA Support**: Two-factor authentication with QR codes and recovery codes
-- **AWS Credentials Encryption**: User AWS credentials are encrypted at rest
-- **Session Management**: Secure session handling with Flask-Login
-- **CORS Protection**: Configured for secure cross-origin requests
-
-## 📁 File Management Features
-
-- **Upload Files**: Drag-and-drop file upload to S3
-- **Create Folders**: Organize files in folder structures
-- **Download Files**: Secure file downloads via presigned URLs
-- **Share Files**: Generate shareable links with expiration
-- **Delete Files/Folders**: Safe deletion with confirmation
-- **File Navigation**: Browse folder structures with breadcrumbs
-
-## 🛠️ Development
-
-### Development Mode
+Or use Terraform for one-click provisioning:
 
 ```bash
-# Run in development mode with live reloading
-docker-compose up --build
-
-# View logs from both services
-docker-compose logs -f
-
-# View logs from specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
+cd terraform
+terraform init
+terraform apply -var="notification_email=your@email.com"
 ```
 
-### Container Management
+---
 
-```bash
-# Check container status
-docker-compose ps
+## 📁 Project Structure
 
-# Restart specific service
-docker-compose restart backend
-docker-compose restart frontend
-
-# Stop application
-docker-compose down
-
-# Stop and remove volumes
-docker-compose down -v
-
-# Rebuild specific service
-docker-compose build backend
-docker-compose build frontend
+```
+secure-locker-v2/
+├── app/
+│   ├── __init__.py          # Flask app factory + blueprint registration
+│   ├── models.py            # User, LockedFile, SharedFile, AuditLog models
+│   ├── auth.py              # Register, login (with 2FA redirect), logout
+│   ├── locker.py            # Upload, download, delete, file detail, ML scan
+│   ├── admin.py             # Admin dashboard, user management, threats, audit
+│   ├── sharing.py           # File sharing with expiry links
+│   ├── crypto_utils.py      # AES-256-CBC encrypt/decrypt + PBKDF2 key derivation
+│   ├── audit.py             # Audit logging (local + CloudWatch)
+│   ├── two_factor.py        # 2FA setup, verify, enable, disable (TOTP)
+│   ├── preview.py           # In-browser file preview (images, PDFs, text)
+│   ├── api.py               # REST API + JWT authentication
+│   └── notifications.py     # WebSocket real-time notifications
+├── ml_engine/
+│   ├── __init__.py
+│   └── engine.py            # Random Forest + Isolation Forest + Threat Scorer
+├── aws_integration/
+│   ├── config.py            # AWS auto-detection + connectivity check
+│   ├── s3_storage.py        # S3 encrypted file storage
+│   ├── sns_alerts.py        # SNS threat alert emails
+│   └── cloudwatch_logger.py # CloudWatch audit log streaming
+├── terraform/
+│   ├── main.tf              # AWS infrastructure definition
+│   ├── variables.tf         # Input variables
+│   ├── outputs.tf           # Output values → env vars
+│   └── README.md            # Terraform usage guide
+├── templates/               # Jinja2 HTML templates (glassmorphism UI)
+├── tests/
+│   └── test_all.py          # 65 tests across all modules
+├── Jenkinsfile              # 11-stage CI/CD pipeline
+├── Dockerfile               # Production container
+├── sonar-project.properties # SonarQube code analysis config
+├── requirements.txt         # Python dependencies
+└── run.py                   # Entry point (with SocketIO support)
 ```
 
-## 🔍 Troubleshooting
+---
 
-### Common Issues
+## 📊 Tech Stack
 
-1. **Database Connection Failed**
-   - Verify MySQL server is running
-   - Check database credentials in `backend/.env`
-   - Ensure MySQL server accepts connections from Docker
+| Layer | Technology |
+|-------|-----------|
+| Backend | Flask 3.0, SQLAlchemy, Flask-Login |
+| Encryption | AES-256-CBC, PBKDF2-HMAC-SHA256 |
+| 2FA | pyotp (TOTP), qrcode (QR generation) |
+| ML | scikit-learn (Random Forest, Isolation Forest) |
+| API | PyJWT (JWT tokens), RESTful JSON |
+| Real-time | Flask-SocketIO, WebSocket |
+| Cloud | AWS S3, SNS, CloudWatch, boto3 |
+| IaC | Terraform (HCL) |
+| CI/CD | Jenkins (11 stages), SonarQube, Docker |
+| Frontend | Jinja2, vanilla CSS (glassmorphism), SocketIO client |
 
-2. **AWS Credentials Encryption Error**
-   - Ensure `AWS_CREDENTIALS_ENCRYPTION_KEY` is properly set in `backend/.env`
-   - Generate a new key: `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-   - Restart backend container: `docker-compose restart backend`
-
-3. **Frontend Can't Connect to Backend**
-   - Check if both containers are running: `docker-compose ps`
-   - Verify backend health: `curl http://localhost:5000/health`
-   - Check frontend nginx configuration in `frontend/nginx.conf`
-
-4. **Port Already in Use**
-   - Stop existing containers: `docker-compose down`
-   - Check for other services using ports 3000 or 5000
-   - Modify ports in `docker-compose.yml` if needed
-
-5. **Container Build Failures**
-   - Clean Docker cache: `docker system prune -a`
-   - Rebuild without cache: `docker-compose build --no-cache`
-
-### Health Checks
-
-- Frontend: `curl http://localhost:3000/health`
-- Backend: `curl http://localhost:5000/health`
-- Container status: `docker-compose ps`
-
-## 📝 API Documentation
-
-The backend provides a REST API with the following endpoints:
-
-- `GET /api` - API information
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `GET /api/files/list` - List files/folders
-- `POST /api/files/upload` - Upload file
-- `POST /api/files/create-folder` - Create folder
-- `DELETE /api/files/delete` - Delete file/folder
-- `GET /api/files/download` - Download file
-- `POST /api/files/share` - Generate share link
-- `GET /api/profile` - Get user profile
-- `POST /api/profile/update` - Update profile
-- `POST /api/aws/connect` - Connect AWS credentials
-- `DELETE /api/aws/disconnect` - Disconnect AWS credentials
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 📋 Quick Reference
-
-### Essential Commands
-
-```bash
-# Start application
-docker-compose up --build -d
-
-# View logs
-docker-compose logs -f
-
-# Stop application
-docker-compose down
-
-# Check status
-docker-compose ps
-
-# Restart backend only
-docker-compose restart backend
-
-# Rebuild frontend only
-docker-compose build frontend
-```
-
-### Key URLs
-
-- **Application**: http://localhost:3000
-- **Backend API**: http://localhost:5000
-- **Health Check**: http://localhost:3000/health
-
-### Important Files
-
-- **Backend Config**: `backend/.env`
-- **Frontend Config**: `frontend/.env`
-- **Docker Compose**: `docker-compose.yml`
-- **Backend Dockerfile**: `backend/Dockerfile`
-- **Frontend Dockerfile**: `frontend/Dockerfile`
-
-## 🤝 Support
-
-For support and questions, please check the troubleshooting section above or create an issue in the project repository.
