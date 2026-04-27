@@ -1,6 +1,6 @@
 # VaultOS — Secure File Locker
 
-Enterprise-grade encrypted file storage with ML threat intelligence, two-factor authentication, REST API, real-time notifications, and cloud integration.
+encrypt file storage with ML threat intelligence, two-factor authentication, and cloud integration.
 
 ## ✨ Features
 
