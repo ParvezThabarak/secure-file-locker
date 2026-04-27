@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ file.original_filename }} — VaultOS{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto">
+  <div class="page-header">
+    <div class="page-title" style="font-family:var(--mono);font-size:1.1rem">{{ file.original_filename }}</div>
+    <div style="display:flex;gap:8px">
+      {% if file.file_extension in ('.png','.jpg','.jpeg','.gif','.pdf','.txt','.md','.csv','.py','.js','.html','.css','.log') %}
+      <a href="{{ url_for('preview.preview_file', file_id=file.id) }}" class="btn btn-ghost btn-sm">👁 Preview</a>
+      {% endif %}
+      <a href="{{ url_for('locker.download', file_id=file.id) }}" class="btn btn-primary btn-sm">↓ Download</a>
+      <a href="{{ url_for('locker.dashboard') }}" class="btn btn-ghost btn-sm">← Back</a>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+    <!-- File Info -->
+    <div class="card"><div class="card-header">File Details</div><div class="card-body">
+      {% set thr, tcol = file.threat_label() %}
+      {% for k,v in [
+        ('Filename', file.original_filename),
+        ('Size', '%.1f KB'|format(file.file_size/1024)),
+        ('Type', file.file_type),
+        ('Uploaded', file.upload_time.strftime('%d %b %Y %H:%M')),
+        ('Downloads', file.download_count),
+        ('Version', 'v' ~ file.version),
+        ('Description', file.description or '—'),
+        ('Tags', file.tags or '—'),
+      ] %}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.85rem">
+        <span style="color:var(--muted)">{{ k }}</span>
+        <span style="font-family:var(--mono)">{{ v }}</span>
+      </div>
+      {% endfor %}
+    </div></div>
+
+    <!-- ML Analysis -->
+    <div class="card"><div class="card-header">🤖 ML Analysis</div><div class="card-body">
+      {% set thr, _ = file.threat_label() %}
+      {% for k,v in [
+        ('Category', file.ml_file_category or '—'),
+        ('Threat Score', '%.3f'|format(file.ml_threat_score)),
+        ('Threat Level', thr),
+        ('Confidence', '%.1f%%'|format(file.ml_confidence*100)),
+        ('Anomaly', '⚠ Detected' if file.ml_is_anomaly else '✓ Normal'),
+      ] %}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.85rem">
+        <span style="color:var(--muted)">{{ k }}</span>
+        <span style="font-family:var(--mono);color:{% if k=='Anomaly' and file.ml_is_anomaly %}var(--warn){% elif k=='Threat Level' and thr in ('HIGH','CRITICAL') %}var(--danger){% else %}var(--text){% endif %}">{{ v }}</span>
+      </div>
+      {% endfor %}
+      <div style="margin-top:1rem">
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">Threat Score</div>
+        <div class="progress-bar" style="height:8px">
+          <div class="progress-fill" style="width:{{ (file.ml_threat_score*100)|int }}%;background:{% if thr=='LOW' %}#10b981{% elif thr=='MEDIUM' %}#fbbf24{% else %}#f87171{% endif %}"></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- Share section -->
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-header">🔗 Share File</div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('sharing.create_share', file_id=file.id) }}" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="margin:0;flex:1;min-width:150px">
+          <label>Share With (username, optional)</label>
+          <input type="text" name="shared_with" placeholder="Leave empty for public link"/>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Expires (hours)</label>
+          <input type="number" name="expires_hours" value="24" min="1" max="720" style="width:90px"/>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Max Downloads</label>
+          <input type="number" name="max_downloads" value="5" min="1" max="100" style="width:80px"/>
+        </div>
+        <button type="submit" class="btn btn-purple btn-sm" style="margin-bottom:0">Create Link</button>
+      </form>
+
+      {% if file.shares %}
+      <div class="divider"></div>
+      <div style="font-size:.78rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem">Active Share Links</div>
+      {% for s in file.shares %}
+      {% set valid, msg = s.is_valid() %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;margin-bottom:6px;font-size:.82rem">
+        <div style="font-family:var(--mono);color:var(--accent);word-break:break-all;max-width:300px">/share/{{ s.token[:16] }}…</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--muted)">{{ s.download_count }}/{{ s.max_downloads }} downloads</span>
+          {% if valid %}<span style="color:var(--accent3);font-size:.75rem">● Active</span>
+          {% else %}<span style="color:var(--muted);font-size:.75rem">{{ msg }}</span>{% endif %}
+          <form method="POST" action="{{ url_for('sharing.revoke', share_id=s.id) }}">
+            <button type="submit" class="btn btn-danger btn-xs">Revoke</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Versions -->
+  {% if versions %}
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-header">📂 Version History</div>
+    <div class="card-body">
+      {% for v in versions %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.85rem">
+        <span style="font-family:var(--mono)">v{{ v.version }} — {{ v.original_filename }}</span>
+        <span style="color:var(--muted)">{{ v.upload_time.strftime('%d %b %Y') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">📋 Audit Log</div>
+  <a href="{{ url_for('admin.dashboard') }}" class="btn btn-ghost btn-sm">← Admin</a>
+</div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>IP</th><th>Status</th><th>Threat</th></tr></thead>
+  <tbody>
+  {% for log in logs.items %}
+  <tr>
+    <td style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">{{ log.timestamp.strftime('%d %b %Y %H:%M:%S') }}</td>
+    <td style="font-family:var(--mono);font-size:.82rem">{{ log.user.username if log.user else 'anon' }}</td>
+    <td><span class="badge {% if log.status=='SUCCESS' %}badge-low{% elif log.status=='FAILURE' %}badge-high{% else %}badge-critical{% endif %}">{{ log.action }}</span></td>
+    <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.resource }}">{{ log.resource or '—' }}</td>
+    <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">{{ log.ip_address or '—' }}</td>
+    <td style="font-size:.8rem;color:{% if log.status=='SUCCESS' %}var(--accent3){% elif log.status=='FAILURE' %}var(--danger){% else %}var(--warn){% endif %}">{{ log.status }}</td>
+    <td style="font-family:var(--mono);font-size:.8rem;color:{% if log.threat_score > .6 %}var(--danger){% else %}var(--muted){% endif %}">{{ '%.2f'|format(log.threat_score) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if logs.pages > 1 %}
+<div style="display:flex;gap:8px;justify-content:center;margin-top:1.5rem">
+  {% for p in range(1, logs.pages+1) %}
+    <a href="{{ url_for('admin.audit', page=p) }}" class="btn btn-ghost btn-sm {% if p==logs.page %}btn-primary{% endif %}">{{ p }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

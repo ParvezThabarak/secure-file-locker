@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Verify 2FA — VaultOS{% endblock %}
+{% block extra_style %}
+<style>
+.verify-wrap{max-width:420px;margin:4rem auto}
+.verify-logo{text-align:center;margin-bottom:2rem}
+.verify-logo .logo-ring{
+  width:70px;height:70px;border-radius:50%;margin:0 auto 1rem;
+  background:linear-gradient(135deg,rgba(16,185,129,0.2),rgba(124,58,237,0.2));
+  border:1px solid rgba(16,185,129,0.3);display:flex;align-items:center;justify-content:center;font-size:2rem;
+}
+.code-input{text-align:center;font-size:2rem;letter-spacing:12px;padding:16px;
+  font-family:var(--mono);font-weight:600}
+</style>
+{% endblock %}
+{% block content %}
+<div class="verify-wrap">
+  <div class="verify-logo">
+    <div class="logo-ring">🛡️</div>
+    <h1 style="font-size:1.5rem;font-weight:700">Two-Factor Verification</h1>
+    <p style="color:var(--muted);font-size:0.88rem;margin-top:4px">
+      Enter the code from your authenticator app
+    </p>
+  </div>
+  <div class="card"><div class="card-body">
+    <form method="POST">
+      <div class="form-group">
+        <label>Authentication Code</label>
+        <input type="text" name="code" required autofocus
+               class="code-input" placeholder="000000"
+               maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px">
+        🔓 Verify & Access Vault
+      </button>
+    </form>
+  </div></div>
+  <p style="text-align:center;margin-top:1.25rem;font-size:0.82rem;color:var(--muted)">
+    Can't access your authenticator? Contact admin to reset 2FA.
+  </p>
+</div>
+{% endblock %}

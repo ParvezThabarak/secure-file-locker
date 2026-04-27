@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Admin — VaultOS{% endblock %}
+{% block extra_style %}
+<style>
+.aws-toggle-header{cursor:pointer;user-select:none;transition:background 0.2s}
+.aws-toggle-header:hover{background:rgba(99,179,237,0.04)}
+.aws-chevron{transition:transform 0.3s;display:inline-block;font-size:0.8rem}
+.aws-chevron.open{transform:rotate(90deg)}
+.aws-body{max-height:0;overflow:hidden;transition:max-height 0.4s ease,padding 0.3s ease;padding:0 1.5rem}
+.aws-body.expanded{max-height:600px;padding:1.5rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">⚙ Admin Dashboard</div>
+  <div style="display:flex;gap:8px">
+    <a href="{{ url_for('admin.users') }}"   class="btn btn-ghost btn-sm">👥 Users</a>
+    <a href="{{ url_for('admin.threats') }}" class="btn btn-ghost btn-sm">⚠ Threats</a>
+    <a href="{{ url_for('admin.audit') }}"   class="btn btn-ghost btn-sm">📋 Audit Log</a>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">Total Users</div><div class="stat-value" style="color:var(--accent)">{{ total_users }}</div></div>
+  <div class="stat-card"><div class="stat-icon">🗂</div><div class="stat-label">Total Files</div><div class="stat-value" style="color:var(--accent3)">{{ total_files }}</div></div>
+  <div class="stat-card"><div class="stat-icon">💾</div><div class="stat-label">Total Storage</div><div class="stat-value" style="color:#c4b5fd;font-size:1.2rem">{{ '%.1f'|format(total_size/1024/1024) }} MB</div></div>
+  <div class="stat-card"><div class="stat-icon">⚠</div><div class="stat-label">High Threats</div><div class="stat-value" style="color:{% if high_threats %}var(--warn){% else %}var(--accent3){% endif %}">{{ high_threats }}</div></div>
+  <div class="stat-card"><div class="stat-icon">🔬</div><div class="stat-label">Anomalies</div><div class="stat-value" style="color:{% if anomalies %}var(--danger){% else %}var(--accent3){% endif %}">{{ anomalies }}</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+  <!-- ML Stats -->
+  <div class="card"><div class="card-header">🤖 ML Model Status</div><div class="card-body">
+    {% for k,v in [
+      ('Classifier', ml_stats.classifier),
+      ('RF Estimators', ml_stats.n_estimators_rf),
+      ('Detector', ml_stats.detector),
+      ('ISO Estimators', ml_stats.n_estimators_iso),
+      ('Status', ml_stats.status.upper()),
+    ] %}
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:.85rem;border-bottom:1px solid rgba(255,255,255,.04)">
+      <span style="color:var(--muted)">{{ k }}</span>
+      <span style="font-family:var(--mono);color:{% if k=='Status' %}var(--accent3){% else %}var(--text){% endif %}">{{ v }}</span>
+    </div>
+    {% endfor %}
+  </div></div>
+
+  <!-- Threat Breakdown -->
+  <div class="card"><div class="card-header">⚠ Threat Level Breakdown</div><div class="card-body">
+    {% for lvl, cnt in threat_data.items() %}
+    {% set colors={'LOW':'#10b981','MEDIUM':'#fbbf24','HIGH':'#f87171','CRITICAL':'#ef4444'} %}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:.85rem">
+      <span class="badge badge-{{ lvl.lower() }}">{{ lvl }}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:120px;height:4px;background:rgba(255,255,255,.06);border-radius:2px">
+          <div style="height:100%;width:{% if total_files %}{{ [((cnt/total_files)*100)|int, 100]|min }}{% else %}0{% endif %}%;background:{{ colors[lvl] }};border-radius:2px"></div>
+        </div>
+        <span style="font-family:var(--mono)">{{ cnt }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div></div>
+</div>
+
+<!-- Recent Audit Logs -->
+<div class="card" style="margin-bottom:1.5rem">
+  <div class="card-header">📋 Recent Activity</div>
+  <div class="table-wrap" style="border:none;border-radius:0">
+  <table>
+    <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>Status</th><th>Threat</th></tr></thead>
+    <tbody>
+    {% for log in recent_logs %}
+    <tr>
+      <td style="font-family:var(--mono);font-size:.75rem;color:var(--muted)">{{ log.timestamp.strftime('%d %b %H:%M') }}</td>
+      <td style="font-family:var(--mono);font-size:.82rem">{{ log.user.username if log.user else 'anon' }}</td>
+      <td><span class="badge {% if log.status=='SUCCESS' %}badge-low{% elif log.status=='FAILURE' %}badge-high{% else %}badge-critical{% endif %}">{{ log.action }}</span></td>
+      <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ log.resource or '—' }}</td>
+      <td style="font-size:.8rem;color:{% if log.status=='SUCCESS' %}var(--accent3){% elif log.status=='FAILURE' %}var(--danger){% else %}var(--warn){% endif %}">{{ log.status }}</td>
+      <td style="font-family:var(--mono);font-size:.8rem;color:{% if log.threat_score > 0.6 %}var(--danger){% else %}var(--muted){% endif %}">{{ '%.2f'|format(log.threat_score) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<!-- AWS Integration Status — Collapsible Toggle -->
+<div class="card">
+  <div class="card-header aws-toggle-header" id="aws-toggle" onclick="toggleAws()" style="display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="aws-chevron" id="aws-chevron">▶</span>
+      ☁️ AWS Integration Status
+    </div>
+    <span class="badge {% if aws_enabled %}badge-low{% else %}badge-enc{% endif %}">
+      {% if aws_enabled %}CONNECTED{% else %}LOCAL MODE{% endif %}
+    </span>
+  </div>
+  <div class="aws-body" id="aws-body">
+    {% if not aws_enabled %}
+    <p style="color:var(--muted);font-size:.88rem">
+      AWS is not configured. The app runs fully on local storage and local audit logs.
+      To enable cloud features, set the environment variables below.
+    </p>
+    <div style="margin-top:1rem;background:rgba(0,0,0,0.3);border-radius:6px;padding:1rem;font-family:var(--mono);font-size:.78rem;color:var(--muted);line-height:1.8">
+      <div style="color:var(--accent3);margin-bottom:.5rem"># Add to your .env or Jenkins credentials:</div>
+      <div>AWS_ACCESS_KEY_ID=<span style="color:var(--text)">your_key_id</span></div>
+      <div>AWS_SECRET_ACCESS_KEY=<span style="color:var(--text)">your_secret</span></div>
+      <div>AWS_REGION=<span style="color:var(--text)">ap-south-1</span></div>
+      <div>AWS_S3_BUCKET=<span style="color:var(--text)">your-bucket-name</span>  <span style="color:var(--muted)"># enables S3 storage</span></div>
+      <div>AWS_SNS_TOPIC_ARN=<span style="color:var(--text)">arn:aws:sns:…</span>  <span style="color:var(--muted)"># enables threat alerts</span></div>
+      <div>AWS_CLOUDWATCH_GROUP=<span style="color:var(--text)">VaultOS</span>  <span style="color:var(--muted)"># enables cloud audit logs</span></div>
+    </div>
+    {% else %}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
+      {% for service, msg in aws_status.items() %}
+      <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:1rem">
+        <div style="font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">
+          {% if service=='s3' %}☁ S3 Storage{% elif service=='sns' %}🔔 SNS Alerts{% else %}📊 CloudWatch{% endif %}
+        </div>
+        <div style="font-size:.82rem;font-family:var(--mono);color:{% if 'OK' in msg %}var(--accent3){% elif 'DISABLED' in msg %}var(--muted){% else %}var(--danger){% endif %}">
+          {{ msg }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if cloud_logs %}
+    <div style="margin-top:1.25rem">
+      <div style="font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem">Recent CloudWatch Logs</div>
+      {% for log in cloud_logs[:5] %}
+      <div style="display:flex;gap:1rem;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem;font-family:var(--mono)">
+        <span style="color:var(--muted);white-space:nowrap">{{ log.get('timestamp','')[:19] }}</span>
+        <span class="badge {% if log.get('status')=='SUCCESS' %}badge-low{% else %}badge-high{% endif %}">{{ log.get('action','—') }}</span>
+        <span style="color:var(--text2)">{{ log.get('username','—') }}</span>
+        <span style="color:var(--muted)">{{ log.get('resource','') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function toggleAws(){
+  const body=document.getElementById('aws-body');
+  const chevron=document.getElementById('aws-chevron');
+  body.classList.toggle('expanded');
+  chevron.classList.toggle('open');
+}
+</script>
+{% endblock %}
+

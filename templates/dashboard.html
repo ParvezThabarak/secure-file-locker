@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Vault — VaultOS{% endblock %}
+{% block extra_style %}
+<style>
+.tag-chip{display:inline-block;background:rgba(124,58,237,0.15);color:#c4b5fd;
+  border:1px solid rgba(124,58,237,0.25);padding:2px 8px;border-radius:20px;font-size:0.7rem;margin:1px}
+.file-name{font-family:var(--mono);font-size:0.84rem;color:var(--text);
+  max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-icon{font-size:1.1rem}
+.action-group{display:flex;gap:4px;align-items:center}
+.storage-wrap{margin-bottom:2rem}
+.storage-label{display:flex;justify-content:space-between;font-size:0.78rem;color:var(--muted);margin-bottom:6px}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem}
+.filter-bar select{width:auto;padding:7px 12px;font-size:0.82rem}
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Your Vault <span>{{ files|length }} files</span></div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('locker.upload') }}" class="btn btn-primary">＋ Lock File</a>
+  </div>
+</div>
+
+{% if threat_files %}
+<div class="alert alert-warning" style="margin-bottom:1.5rem;">
+  ⚠ <strong>{{ threat_files|length }} high-risk file(s)</strong> detected by ML threat analysis. Review below.
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card" style="--glow-color:rgba(99,179,237,0.1)">
+    <div class="stat-icon">🗂</div>
+    <div class="stat-label">Locked Files</div>
+    <div class="stat-value" style="color:var(--accent)">{{ files|length }}</div>
+    <div class="stat-sub">AES-256 encrypted</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">💾</div>
+    <div class="stat-label">Storage Used</div>
+    <div class="stat-value" style="color:var(--accent3);font-size:1.3rem">{{ '%.1f'|format(total_size/1024/1024) }} MB</div>
+    <div class="stat-sub">of {{ '%.0f'|format(current_user.storage_quota/1024/1024) }} MB quota</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">🛡</div>
+    <div class="stat-label">Threat Alerts</div>
+    <div class="stat-value" style="color:{% if threat_files %}var(--warn){% else %}var(--accent3){% endif %}">
+      {{ threat_files|length }}
+    </div>
+    <div class="stat-sub">high-risk files</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">📥</div>
+    <div class="stat-label">Total Downloads</div>
+    <div class="stat-value" style="color:#c4b5fd">{{ files|sum(attribute='download_count') }}</div>
+    <div class="stat-sub">across all files</div>
+  </div>
+</div>
+
+<!-- Storage bar -->
+<div class="storage-wrap">
+  <div class="storage-label">
+    <span>Storage</span>
+    <span>{{ current_user.storage_percent() }}% used</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" style="width:{{ current_user.storage_percent() }}%"></div></div>
+</div>
+
+<!-- Filters -->
+<form class="filter-bar" method="GET">
+  <input type="text" name="q" placeholder="🔍 Search files…" value="{{ q }}" style="max-width:220px;padding:7px 14px;font-size:0.82rem"/>
+  <select name="sort">
+    <option value="recent" {% if sort=='recent' %}selected{% endif %}>Sort: Recent</option>
+    <option value="name"   {% if sort=='name'   %}selected{% endif %}>Sort: Name</option>
+    <option value="size"   {% if sort=='size'   %}selected{% endif %}>Sort: Size</option>
+    <option value="threat" {% if sort=='threat' %}selected{% endif %}>Sort: Threat ↑</option>
+  </select>
+  <button type="submit" class="btn btn-ghost btn-sm">Apply</button>
+  {% if q or tag %}<a href="{{ url_for('locker.dashboard') }}" class="btn btn-ghost btn-sm">✕ Clear</a>{% endif %}
+</form>
+
+{% if files %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>File</th><th>Category</th><th>Size</th>
+        <th>Threat Score</th><th>Anomaly</th><th>Uploaded</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in files %}
+      {% set thr, tcol = f.threat_label() %}
+      <tr>
+        <td>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <span class="file-name" title="{{ f.original_filename }}">{{ f.original_filename }}</span>
+            {% if f.version > 1 %}<span style="font-size:0.7rem;color:var(--muted)">v{{ f.version }}</span>{% endif %}
+            {% if f.tags %}
+              {% for t in f.tags.split(',')[:2] %}
+              <span class="tag-chip">{{ t.strip() }}</span>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </td>
+        <td>
+          {% set icons={'document':'📄','office':'📊','image':'🖼','media':'🎵','archive':'📦','code':'💻','executable':'⚠️','other':'📎'} %}
+          <span class="cat-icon">{{ icons.get(f.ml_file_category,'📎') }}</span>
+          <span style="font-size:0.8rem;color:var(--muted)">{{ f.ml_file_category or '—' }}</span>
+        </td>
+        <td style="font-family:var(--mono);font-size:0.8rem;color:var(--muted)">
+          {{ '%.1f'|format(f.file_size/1024) }} KB
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="threat-bar">
+              <div class="threat-fill" style="width:{{ (f.ml_threat_score*100)|int }}%;background:{% if thr=='LOW' %}#10b981{% elif thr=='MEDIUM' %}#fbbf24{% elif thr=='HIGH' %}#f87171{% else %}#ef4444{% endif %}"></div>
+            </div>
+            <span class="badge badge-{{ thr.lower() }}">{{ thr }}</span>
+          </div>
+        </td>
+        <td>
+          {% if f.ml_is_anomaly %}
+          <span class="badge badge-high">⚠ Anomaly</span>
+          {% else %}
+          <span style="font-size:0.75rem;color:var(--accent3)">✓ Normal</span>
+          {% endif %}
+        </td>
+        <td style="font-family:var(--mono);font-size:0.78rem;color:var(--muted)">
+          {{ f.upload_time.strftime('%d %b %Y') }}
+        </td>
+        <td>
+          <div class="action-group">
+            {% if f.file_extension in ('.png','.jpg','.jpeg','.gif','.pdf','.txt','.md','.csv','.py','.js','.html','.css','.log') %}
+            <a href="{{ url_for('preview.preview_file', file_id=f.id) }}" class="btn btn-ghost btn-xs" title="Preview">👁</a>
+            {% endif %}
+            <a href="{{ url_for('locker.download', file_id=f.id) }}" class="btn btn-ghost btn-xs" title="Download">↓</a>
+            <a href="{{ url_for('locker.file_detail', file_id=f.id) }}" class="btn btn-ghost btn-xs" title="Details">⋯</a>
+            <form method="POST" action="{{ url_for('locker.delete', file_id=f.id) }}" onsubmit="return confirm('Permanently delete?')">
+              <button type="submit" class="btn btn-danger btn-xs" title="Delete">✕</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body empty-state">
+    <div class="es-icon">🔓</div>
+    <p>Your vault is empty. Lock your first file to get started.</p>
+    <a href="{{ url_for('locker.upload') }}" class="btn btn-primary">＋ Lock a File</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

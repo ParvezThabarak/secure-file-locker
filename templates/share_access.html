@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Shared File — VaultOS{% endblock %}
+{% block content %}
+<div style="max-width:440px;margin:3rem auto">
+  <div class="page-title" style="margin-bottom:1.5rem;text-align:center">🔗 Shared File Access</div>
+  <div class="card"><div class="card-body">
+    <div style="margin-bottom:1.5rem">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">Filename</div>
+      <div style="font-family:var(--mono)">{{ file.original_filename }}</div>
+      <div style="font-size:.75rem;color:var(--muted);margin-top:.75rem">
+        Downloads remaining: {{ share.max_downloads - share.download_count }} /
+        Expires: {{ share.expires_at.strftime('%d %b %Y %H:%M') if share.expires_at else 'Never' }}
+      </div>
+    </div>
+    <form method="POST">
+      <div class="form-group">
+        <label>Decryption Password</label>
+        <input type="password" name="password" required autofocus placeholder="Password set by the file owner"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">🔓 Decrypt & Download</button>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

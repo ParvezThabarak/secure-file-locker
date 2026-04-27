@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Upload — VaultOS{% endblock %}
+{% block extra_style %}
+<style>
+.upload-wrap{max-width:580px;margin:0 auto}
+.drop-zone{
+  border:2px dashed rgba(99,179,237,0.2);border-radius:var(--radius);
+  padding:3rem;text-align:center;cursor:pointer;transition:all 0.3s;
+  background:rgba(99,179,237,0.02);position:relative;
+}
+.drop-zone:hover,.drop-zone.over{
+  border-color:var(--accent);background:rgba(99,179,237,0.06);
+  box-shadow:0 0 30px rgba(99,179,237,0.1);
+}
+.drop-icon{font-size:3rem;margin-bottom:1rem;opacity:0.6}
+.ml-preview{
+  background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:1rem;margin-top:1rem;display:none;
+}
+.ml-preview.visible{display:block}
+.ml-row{display:flex;justify-content:space-between;align-items:center;
+  padding:4px 0;font-size:0.82rem}
+.ml-key{color:var(--muted);font-family:var(--mono)}
+.ml-val{font-weight:600;font-family:var(--mono)}
+.security-info{background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);
+  border-radius:var(--radius-sm);padding:1rem;font-size:0.8rem;color:#6ee7b7;margin-top:1rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="upload-wrap">
+  <div class="page-header" style="margin-bottom:1.5rem">
+    <div class="page-title">🔒 Lock a File</div>
+    <a href="{{ url_for('locker.dashboard') }}" class="btn btn-ghost btn-sm">← Back</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="POST" enctype="multipart/form-data" id="upload-form">
+
+        <div class="form-group">
+          <label>Select File</label>
+          <div class="drop-zone scan-anim" id="drop-zone" onclick="document.getElementById('file-inp').click()">
+            <div class="drop-icon">📁</div>
+            <p id="drop-label" style="color:var(--muted);font-size:0.9rem">Click or drag & drop a file here</p>
+            <p style="color:var(--muted);font-size:0.76rem;margin-top:4px">Max 50 MB • txt, pdf, png, docx, zip, mp4 and more</p>
+          </div>
+          <input type="file" id="file-inp" name="file" required style="display:none"/>
+        </div>
+
+        <!-- ML Pre-scan result -->
+        <div class="ml-preview" id="ml-preview">
+          <div style="font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">🤖 ML Pre-Scan Analysis</div>
+          <div class="ml-row"><span class="ml-key">Category</span><span class="ml-val" id="ml-cat">—</span></div>
+          <div class="ml-row"><span class="ml-key">Threat Level</span><span class="ml-val" id="ml-level">—</span></div>
+          <div class="ml-row"><span class="ml-key">Threat Score</span><span class="ml-val" id="ml-score">—</span></div>
+          <div class="ml-row"><span class="ml-key">Anomaly</span><span class="ml-val" id="ml-anomaly">—</span></div>
+          <div class="ml-row"><span class="ml-key">Reason</span><span class="ml-val" id="ml-reason" style="font-size:0.75rem;max-width:220px;text-align:right">—</span></div>
+        </div>
+
+        <div class="form-row" style="margin-top:1rem">
+          <div class="form-group">
+            <label>Encryption Password</label>
+            <input type="password" name="password" required placeholder="Min 6 characters" minlength="6"/>
+            <div class="form-hint">⚠ Never saved — required to decrypt later</div>
+          </div>
+          <div class="form-group">
+            <label>Description (optional)</label>
+            <input type="text" name="description" placeholder="What is this file?"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Tags (optional, comma-separated)</label>
+          <input type="text" name="tags" placeholder="work, finance, backup"/>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;">
+          🔐 Encrypt & Lock File
+        </button>
+      </form>
+
+      <div class="security-info">
+        🛡️ AES-256-CBC encryption • PBKDF2-HMAC-SHA256 key derivation (100K iterations) •
+        Random 16-byte salt & IV per file • Password never stored • ML threat scan on upload
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInp  = document.getElementById('file-inp');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  if (e.dataTransfer.files.length) {
+    const dt = e.dataTransfer;
+    fileInp.files = dt.files;
+    handleFile(dt.files[0]);
+  }
+});
+fileInp.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(f) {
+  document.getElementById('drop-label').textContent = `📎 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+  runMLScan(f.name, f.size);
+}
+
+async function runMLScan(filename, size) {
+  const preview = document.getElementById('ml-preview');
+  preview.classList.add('visible');
+  document.getElementById('ml-cat').textContent   = 'Scanning…';
+  document.getElementById('ml-level').textContent = '—';
+  try {
+    const res = await fetch('/api/ml-scan', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ filename, size })
+    });
+    const d = await res.json();
+    const colors = { LOW:'#10b981', MEDIUM:'#fbbf24', HIGH:'#f87171', CRITICAL:'#ef4444' };
+    document.getElementById('ml-cat').textContent   = (d.category || '—').toUpperCase();
+    document.getElementById('ml-level').innerHTML   = `<span style="color:${colors[d.level]}">${d.level}</span>`;
+    document.getElementById('ml-score').textContent = `${(d.score * 100).toFixed(1)}%`;
+    document.getElementById('ml-anomaly').innerHTML = d.is_anomaly
+      ? '<span style="color:#f87171">⚠ Detected</span>'
+      : '<span style="color:#10b981">✓ Normal</span>';
+    document.getElementById('ml-reason').textContent = d.anomaly_reason || '—';
+  } catch(e) {
+    document.getElementById('ml-cat').textContent = 'Scan unavailable';
+  }
+}
+</script>
+{% endblock %}

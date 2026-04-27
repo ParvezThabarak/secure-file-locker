@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Threats — Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">⚠ Threat Intelligence</div>
+  <a href="{{ url_for('admin.dashboard') }}" class="btn btn-ghost btn-sm">← Admin</a>
+</div>
+{% if flagged %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>File</th><th>Owner</th><th>Category</th><th>Threat Score</th><th>Level</th><th>Anomaly</th><th>Uploaded</th></tr></thead>
+  <tbody>
+  {% for f in flagged %}
+  {% set thr, _ = f.threat_label() %}
+  <tr>
+    <td style="font-family:var(--mono);font-size:.84rem">{{ f.original_filename }}</td>
+    <td style="color:var(--muted)">{{ f.owner.username }}</td>
+    <td>{{ f.ml_file_category or '—' }}</td>
+    <td>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="threat-bar"><div class="threat-fill" style="width:{{ (f.ml_threat_score*100)|int }}%;background:{% if thr=='LOW' %}#10b981{% elif thr=='MEDIUM' %}#fbbf24{% else %}#f87171{% endif %}"></div></div>
+        <span style="font-family:var(--mono);font-size:.82rem">{{ '%.3f'|format(f.ml_threat_score) }}</span>
+      </div>
+    </td>
+    <td><span class="badge badge-{{ thr.lower() }}">{{ thr }}</span></td>
+    <td>{% if f.ml_is_anomaly %}<span style="color:var(--warn)">⚠ Yes</span>{% else %}<span style="color:var(--accent3)">✓ No</span>{% endif %}</td>
+    <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">{{ f.upload_time.strftime('%d %b %Y') }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="card"><div class="card-body empty-state"><div class="es-icon">✅</div><p>No high-risk files detected.</p></div></div>
+{% endif %}
+{% endblock %}

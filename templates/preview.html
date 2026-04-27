@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Preview — {{ file.original_filename }} — VaultOS{% endblock %}
+{% block extra_style %}
+<style>
+.preview-wrap{max-width:900px;margin:0 auto}
+.preview-password{max-width:480px;margin:2rem auto}
+.preview-viewport{background:rgba(0,0,0,0.3);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;min-height:300px;margin-top:1.5rem;
+  display:flex;align-items:center;justify-content:center;position:relative}
+.preview-viewport img{max-width:100%;max-height:70vh;object-fit:contain}
+.preview-viewport iframe,.preview-viewport embed{width:100%;height:75vh;border:none}
+.preview-text{width:100%;max-height:70vh;overflow:auto;padding:1.5rem;
+  font-family:var(--mono);font-size:0.82rem;line-height:1.7;white-space:pre-wrap;
+  color:var(--text);background:rgba(0,0,0,0.2)}
+.preview-text .line-num{color:var(--muted);user-select:none;display:inline-block;
+  width:3.5em;text-align:right;padding-right:1em;opacity:0.5}
+.preview-loading{color:var(--muted);font-size:0.9rem}
+.preview-toolbar{display:flex;justify-content:space-between;align-items:center;
+  padding:12px 16px;background:var(--glass);border:1px solid var(--border);
+  border-radius:var(--radius-sm);margin-top:1rem}
+.preview-toolbar .info{font-family:var(--mono);font-size:0.8rem;color:var(--muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="preview-wrap">
+  <div class="page-header">
+    <div class="page-title" style="font-family:var(--mono);font-size:1.1rem">
+      👁 {{ file.original_filename }}
+      <span class="badge badge-enc" style="margin-left:8px">{{ preview_type|upper }}</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('locker.download', file_id=file.id) }}" class="btn btn-primary btn-sm">↓ Download</a>
+      <a href="{{ url_for('locker.file_detail', file_id=file.id) }}" class="btn btn-ghost btn-sm">Details</a>
+      <a href="{{ url_for('locker.dashboard') }}" class="btn btn-ghost btn-sm">← Back</a>
+    </div>
+  </div>
+
+  <!-- Password form -->
+  <div class="preview-password" id="pw-section">
+    <div class="card"><div class="card-body">
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <div style="font-size:2rem;margin-bottom:0.5rem">🔓</div>
+        <p style="color:var(--muted);font-size:0.88rem">Enter decryption password to preview this file</p>
+      </div>
+      <form onsubmit="loadPreview(event)">
+        <div class="form-group">
+          <label>Decryption Password</label>
+          <input type="password" id="preview-pw" required placeholder="Password used to lock this file"/>
+        </div>
+        <button type="submit" class="btn btn-primary" id="preview-btn" style="width:100%;justify-content:center;padding:11px">
+          👁 Decrypt & Preview
+        </button>
+      </form>
+    </div></div>
+  </div>
+
+  <!-- Preview viewport (hidden until decrypted) -->
+  <div id="preview-area" style="display:none">
+    <div class="preview-viewport" id="viewport">
+      <span class="preview-loading">🔄 Decrypting and loading preview…</span>
+    </div>
+    <div class="preview-toolbar">
+      <div class="info">{{ file.original_filename }} — {{ '%.1f'|format(file.file_size/1024) }} KB — {{ file.file_type }}</div>
+      <a href="{{ url_for('locker.download', file_id=file.id) }}" class="btn btn-ghost btn-xs">↓ Download Original</a>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadPreview(e){
+  e.preventDefault();
+  const pw = document.getElementById('preview-pw').value;
+  const btn = document.getElementById('preview-btn');
+  btn.textContent = '🔄 Decrypting…'; btn.disabled = true;
+
+  const form = new FormData();
+  form.append('password', pw);
+
+  try {
+    const res = await fetch('{{ url_for("preview.preview_content", file_id=file.id) }}', {
+      method:'POST', body: form
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || 'Preview failed');
+      btn.textContent = '👁 Decrypt & Preview'; btn.disabled = false;
+      return;
+    }
+
+    document.getElementById('pw-section').style.display = 'none';
+    document.getElementById('preview-area').style.display = 'block';
+    const vp = document.getElementById('viewport');
+
+    if (data.type === 'image') {
+      vp.innerHTML = `<img src="${data.data}" alt="${data.filename}" style="max-width:100%"/>`;
+    } else if (data.type === 'pdf') {
+      vp.innerHTML = `<embed src="${data.data}" type="application/pdf" style="width:100%;height:75vh"/>`;
+    } else if (data.type === 'text') {
+      const lines = data.data.split('\n');
+      const html = lines.map((l,i) =>
+        `<span class="line-num">${i+1}</span>${l.replace(/</g,'&lt;').replace(/>/g,'&gt;')}`
+      ).join('\n');
+      vp.innerHTML = `<div class="preview-text">${html}</div>`;
+    }
+  } catch(err) {
+    alert('Preview failed: ' + err.message);
+    btn.textContent = '👁 Decrypt & Preview'; btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

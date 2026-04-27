@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Users — Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">👥 User Management</div>
+  <a href="{{ url_for('admin.dashboard') }}" class="btn btn-ghost btn-sm">← Admin</a>
+</div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>#</th><th>Username</th><th>Email</th><th>Files</th><th>Storage</th><th>Logins</th><th>Last Login</th><th>Status</th><th>Action</th></tr></thead>
+  <tbody>
+  {% for u in users %}
+  <tr>
+    <td style="color:var(--muted);font-family:var(--mono)">{{ u.id }}</td>
+    <td style="font-family:var(--mono)">{{ u.username }}{% if u.is_admin %} <span class="badge badge-enc">ADMIN</span>{% endif %}</td>
+    <td style="color:var(--muted);font-size:.82rem">{{ u.email }}</td>
+    <td style="font-family:var(--mono)">{{ u.files|length }}</td>
+    <td style="font-family:var(--mono);font-size:.82rem">{{ '%.1f'|format(u.storage_used/1024/1024) }} MB</td>
+    <td style="font-family:var(--mono)">{{ u.login_count }}</td>
+    <td style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">{{ u.last_login.strftime('%d %b %H:%M') if u.last_login else '—' }}</td>
+    <td>
+      {% if u.is_active_acc %}<span style="color:var(--accent3);font-size:.8rem">● Active</span>
+      {% else %}<span style="color:var(--danger);font-size:.8rem">● Locked</span>{% endif %}
+    </td>
+    <td>
+      {% if not u.is_admin %}
+      <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}">
+        <button type="submit" class="btn btn-ghost btn-xs">
+          {{ 'Deactivate' if u.is_active_acc else 'Activate' }}
+        </button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
